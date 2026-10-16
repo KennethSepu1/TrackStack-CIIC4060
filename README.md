@@ -62,8 +62,25 @@ To remove the test container and its data:
 docker compose -p ciic4060-stage2 down -v
 ```
 
+## SQL schema and Render database
+
+- [SQL/schema.sql](SQL/schema.sql): SQL used to enable PostGIS and create the 11 project tables, including their primary keys, foreign keys, and geometry columns.
+- [SQL/verify_schema.sql](SQL/verify_schema.sql): read-only checks of the stored schema against the professor's table diagram.
+
+| Connection setting | Value |
+| --- | --- |
+| PostgreSQL / PostGIS | 17.11 / 3.6 |
+| Region | Virginia (US East) |
+| External host | `dpg-db8p4eks728c73aic0f0-a.virginia-postgres.render.com` |
+| Port | `5432` |
+| Database | `car_tracking_o82k` |
+| Schema | `public` |
+| SSL mode | `require` |
+
+Schema verification passed on Render: 11 project tables, 54 columns with the expected data types, 11 primary keys, 8 foreign keys, and 5 geometry columns. All geometry columns have SRID 4326 and two dimensions. PostGIS also supplies `spatial_ref_sys`; it is not one of the 11 project tables. These checks do not verify imported rows or values.
+
 ## Render submission
 
-The final database must be hosted on Render. Kenneth must provide the production schema and external connection URL. Set `DATABASE_URL` with SSL enabled (`sslmode=require`), then run `load` and `validate`. The official dataset contains 32,752 records across 11 tables. Docker testing alone does not complete the submission.
+The production schema is configured on Render using `SQL/schema.sql`. Set `DATABASE_URL` privately with the external connection URL and SSL enabled (`sslmode=require`), then run `load` and `validate`. The official dataset contains 32,752 records across 11 tables. Docker testing alone does not complete the submission.
 
-The professor requires database credentials in the GitHub Classroom README. Before submission, add the actual host, port, database name, evaluation username, password, and SSL settings in the private team repository. Render credentials have not been supplied yet. Keep personal credentials and local `.env` files out of Git.
+The professor requires database credentials in the GitHub Classroom README. The connection details above are documented, but the grading username and password are still pending an approved delivery method. This grading-access requirement is not yet complete. Keep actual passwords, full connection URLs, Render account credentials, and local `.env` files out of Git under the current credential-handling instructions.
