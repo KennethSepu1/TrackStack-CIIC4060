@@ -1,1 +1,1 @@
-"""Read the official Car Tracking datasets for the Phase I ETL."""
+"""Load the official Car Tracking datasets into PostgreSQL and PostGIS."""
