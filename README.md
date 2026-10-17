@@ -2,9 +2,19 @@
 
 Loads the 11 Car Tracking Parquet files into PostgreSQL 17 with PostGIS. Uses Python and direct SQL.
 
+## Team
+
+| Member | Role |
+| ------ | ---- |
+| Ian Ramos | Python ETL |
+| Kenneth Sepulveda | Schema and Render |
+| Wilson Morales | Testing, validation and documentation |
+
 ## Setup
 
 Use Python 3.11 or later and run commands from the repository root.
+
+On macOS, the built-in `python3` is 3.9 and can't install the pinned packages. Install Python 3.12 and create the environment with `python3.12 -m venv .venv` instead.
 
 ```sh
 python3 -m venv .venv
@@ -68,7 +78,7 @@ docker compose -p ciic4060-stage2 down -v
 
 | Connection setting   | Value                                                     |
 | -------------------- | --------------------------------------------------------- |
-| PostgreSQL / PostGIS | 17.11 / 3.6                                               |
+| PostgreSQL / PostGIS | 17.11 / 3.6.2                                             |
 | Region               | Virginia (US East)                                        |
 | External host        | `dpg-db8p4eks728c73aic0f0-a.virginia-postgres.render.com` |
 | Port                 | `5432`                                                    |
@@ -85,4 +95,4 @@ python -m ETL load
 python -m ETL validate
 ```
 
-The Render schema checks and data validation passed for all 11 tables and 32,752 records.
+The Render schema checks and data validation passed for all 11 tables and 32,752 records. See [VALIDATION.md](VALIDATION.md) for the full results.
