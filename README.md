@@ -84,7 +84,7 @@ docker compose -p ciic4060-stage2 down -v
 | Port                 | `5432`                                                    |
 | Database             | `car_tracking_o82k`                                       |
 | User                 | `car_tracking_o82k_user`                                  |
-| Password             | Pending                                                   |
+| Password             | Sent to the instructor by email                           |
 | Schema               | `public`                                                  |
 | SSL mode             | `require`                                                 |
 
