@@ -28,7 +28,7 @@ The Docker database was started with `docker compose -p ciic4060-stage2 up -d --
 
 ## Render
 
-The Render checks were read only. Only `python -m ETL validate`, `SQL/verify_schema.sql` and SELECT queries were run against Render. The `psql` sessions ran with `default_transaction_read_only=on`. No load and no tests were run against Render.
+The Render checks did not change project records. `python -m ETL validate` used temporary tables to compare the Parquet data with the stored rows. The `psql` schema checks and SELECT queries ran with `default_transaction_read_only=on`. No load or mutation tests were run against Render during this validation.
 
 | Check | Result |
 | ----- | ------ |

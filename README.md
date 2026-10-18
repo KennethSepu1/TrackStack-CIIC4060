@@ -4,17 +4,17 @@ Loads the 11 Car Tracking Parquet files into PostgreSQL 17 with PostGIS. Uses Py
 
 ## Team
 
-| Member | Role |
-| ------ | ---- |
-| Ian Ramos | Python ETL |
-| Kenneth Sepulveda | Schema and Render |
-| Wilson Morales | Testing, validation and documentation |
+| Member            | Role                                  |
+| ----------------- | ------------------------------------- |
+| Ian Ramos         | Python ETL                            |
+| Kenneth Sepulveda | Schema and Render                     |
+| Wilson Morales    | Testing, validation and documentation |
 
 ## Setup
 
 Use Python 3.11 or later and run commands from the repository root.
 
-On macOS, the built-in `python3` is 3.9 and can't install the pinned packages. Install Python 3.12 and create the environment with `python3.12 -m venv .venv` instead.
+Check `python3 --version` first. If it is older than 3.11, install a supported version and use that executable to create the environment, for example `python3.12 -m venv .venv`.
 
 ```sh
 python3 -m venv .venv
@@ -84,7 +84,7 @@ docker compose -p ciic4060-stage2 down -v
 | Port                 | `5432`                                                    |
 | Database             | `car_tracking_o82k`                                       |
 | User                 | `car_tracking_o82k_user`                                  |
-| Password             | Sent to the instructor by email                           |
+| Password             | Shared separately by email                                |
 | Schema               | `public`                                                  |
 | SSL mode             | `require`                                                 |
 
