@@ -96,3 +96,23 @@ python -m ETL validate
 ```
 
 The Render schema checks and data validation passed for all 11 tables and 32,752 records. See [VALIDATION.md](VALIDATION.md) for the full results.
+
+## Phase II schema migration (Docker)
+
+From the repository root, start with the local Docker database initialized with
+the Phase I `public` tables. Set `DATABASE_URL` to your local Docker connection
+in PowerShell before running these commands.
+
+```powershell
+.\.venv\Scripts\python.exe -m ETL load --schema public
+Get-Content -Raw .\SQL\phase2_schema_and_ids.sql | docker compose -p ciic4060-stage2 exec -T db psql -X -v ON_ERROR_STOP=1 -U etl_test -d ciic4060_test -f -
+.\.venv\Scripts\python.exe -m ETL validate --schema projectfall2026
+Get-Content -Raw .\SQL\verify_phase2_ids.sql | docker compose -p ciic4060-stage2 exec -T db psql -X -v ON_ERROR_STOP=1 -U etl_test -d ciic4060_test -f -
+```
+
+Run the migration once. It moves the 11 project tables to `projectfall2026`
+and adds generated IDs to seven API tables while preserving explicit ETL IDs.
+
+Docker verification matched 32,752 official rows and passed all seven ID
+checks. The ID check rolls back its test rows. The migration has not been
+applied to Render.
