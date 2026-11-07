@@ -114,5 +114,14 @@ Run the migration once. It moves the 11 project tables to `projectfall2026`
 and adds generated IDs to seven API tables while preserving explicit ETL IDs.
 
 Docker verification matched 32,752 official rows and passed all seven ID
-checks. The ID check rolls back its test rows. The migration has not been
-applied to Render.
+checks. The ID check rolls back its test rows.
+
+### Render verification
+
+The Phase II migration was applied to Render on November 7, 2026. Read-only
+checks confirmed 11 tables in `projectfall2026`, 32,752 rows, seven generated
+ID columns, 11 primary keys, eight foreign keys, and five geometry columns
+with SRID 4326.
+
+Set `DATABASE_URL` in the backend environment to the Render PostgreSQL
+connection string. Configure the Phase II backend to query `projectfall2026`.
