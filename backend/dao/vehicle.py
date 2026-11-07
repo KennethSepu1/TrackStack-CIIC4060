@@ -178,3 +178,37 @@ class VehicleDAO:
             raise VehicleInUseError(
                 "Vehicle is referenced by another record."
             ) from exc
+
+    def get_current_location(self, vehicle_id: int):
+        """Return a vehicle with its latest ping, or None if it is missing."""
+        with get_connection() as conn, conn.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT vehicle.vehicle_id, vehicle.plate_number,
+                       status.name AS status, kind.name AS vehicle_kind,
+                       fuel.name AS fuel_type, vehicle_type.emissions_rating,
+                       ping.ts AS last_ts,
+                       ST_AsGeoJSON(ping.geom)::jsonb AS last_geom,
+                       ping.speed_kph, ping.heading_deg
+                FROM projectfall2026.vehicle AS vehicle
+                LEFT JOIN projectfall2026.vehicle_status AS status
+                    ON status.vehicle_status_id = vehicle.vehicle_status_id
+                LEFT JOIN projectfall2026.vehicle_type AS vehicle_type
+                    ON vehicle_type.vehicle_type_id = vehicle.vehicle_type_id
+                LEFT JOIN projectfall2026.vehicle_kind AS kind
+                    ON kind.vehicle_kind_id = vehicle_type.vehicle_kind_id
+                LEFT JOIN projectfall2026.fuel_type AS fuel
+                    ON fuel.fuel_type_id = vehicle_type.fuel_type_id
+                LEFT JOIN LATERAL (
+                    SELECT ts, geom, speed_kph, heading_deg
+                    FROM projectfall2026.location_ping
+                    WHERE vehicle_id = vehicle.vehicle_id
+                      AND ts IS NOT NULL
+                    ORDER BY ts DESC, ping_id DESC
+                    LIMIT 1
+                ) AS ping ON TRUE
+                WHERE vehicle.vehicle_id = %s
+                """,
+                (vehicle_id,),
+            )
+            return cursor.fetchone()
