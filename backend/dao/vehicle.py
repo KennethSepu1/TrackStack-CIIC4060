@@ -3,6 +3,32 @@ from psycopg import sql
 from psycopg.errors import ForeignKeyViolation
 from backend.db import get_connection
 
+
+_VEHICLE_LIST_SOURCE = sql.SQL(
+    """
+    FROM projectfall2026.vehicle AS v
+    LEFT JOIN projectfall2026.vehicle_status AS s
+        ON s.vehicle_status_id = v.vehicle_status_id
+    WHERE (
+        %(plate)s::text IS NULL
+        OR strpos(v.plate_number, %(plate)s) > 0
+    )
+    AND (
+        %(status)s::text IS NULL
+        OR s.name = %(status)s
+        OR v.vehicle_status_id::text = %(status)s
+    )
+    """
+)
+
+
+def _vehicle_filter_params(plate_number, status):
+    return {
+        "plate": plate_number,
+        "status": None if status is None else str(status),
+    }
+
+
 class DuplicatePlateError(ValueError):
     """The plate number is already registered."""
 
@@ -40,33 +66,34 @@ class VehicleDAO:
         params = {
             "limit": limit,
             "offset": offset,
-            "plate": plate_number,
-            "status": None if status is None else str(status),
+            **_vehicle_filter_params(plate_number, status),
         }
 
         with get_connection() as conn, conn.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
-                """
-                SELECT v.vehicle_id, v.vehicle_type_id, v.vehicle_status_id,
-                       v.plate_number, v.make, v.model, v.year, v.created_at
-                FROM projectfall2026.vehicle AS v
-                LEFT JOIN projectfall2026.vehicle_status AS s
-                    ON s.vehicle_status_id = v.vehicle_status_id
-                WHERE (
-                    %(plate)s::text IS NULL
-                    OR strpos(v.plate_number, %(plate)s) > 0
-                )
-                AND (
-                    %(status)s::text IS NULL
-                    OR s.name = %(status)s
-                    OR v.vehicle_status_id::text = %(status)s
-                )
-                ORDER BY v.vehicle_id
-                LIMIT %(limit)s OFFSET %(offset)s
-                """,
+                sql.SQL(
+                    """
+                    SELECT v.vehicle_id, v.vehicle_type_id, v.vehicle_status_id,
+                           v.plate_number, v.make, v.model, v.year, v.created_at
+                    {}
+                    ORDER BY v.vehicle_id
+                    LIMIT %(limit)s OFFSET %(offset)s
+                    """
+                ).format(_VEHICLE_LIST_SOURCE),
                 params,
             )
             return cursor.fetchall()
+
+    def count_vehicles(
+        self,
+        *,
+        plate_number: str | None = None,
+        status: str | int | None = None,
+    ) -> int:
+        """Return the number of vehicles matching the list filters."""
+        query = sql.SQL("SELECT count(*) {}").format(_VEHICLE_LIST_SOURCE)
+        with get_connection() as conn:
+            return conn.execute(query, _vehicle_filter_params(plate_number, status)).fetchone()[0]
 
     def create_vehicle(
         self,

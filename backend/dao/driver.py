@@ -17,6 +17,19 @@ class DriverInUseError(ValueError):
 
 # The schema has no UNIQUE constraint on license_number.
 _LICENSE_WRITE_LOCK = "LOCK TABLE projectfall2026.driver IN SHARE ROW EXCLUSIVE MODE"
+_DRIVER_FILTERS = sql.SQL(
+    """
+    WHERE (
+        %(name)s::text IS NULL
+        OR strpos(lower(first_name), lower(%(name)s)) > 0
+        OR strpos(lower(last_name), lower(%(name)s)) > 0
+    )
+      AND (
+          %(license_number)s::text IS NULL
+          OR strpos(lower(license_number), lower(%(license_number)s)) > 0
+      )
+    """
+)
 
 
 def _required_text(field: str, value) -> str:
@@ -66,21 +79,15 @@ class DriverDAO:
         """Return a page of drivers matching the supplied filters."""
         with get_connection() as conn, conn.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
-                """
-                SELECT driver_id, first_name, last_name, license_number, hired_at
-                FROM projectfall2026.driver
-                WHERE (
-                    %(name)s::text IS NULL
-                    OR strpos(lower(first_name), lower(%(name)s)) > 0
-                    OR strpos(lower(last_name), lower(%(name)s)) > 0
-                )
-                  AND (
-                      %(license_number)s::text IS NULL
-                      OR strpos(lower(license_number), lower(%(license_number)s)) > 0
-                  )
-                ORDER BY driver_id
-                LIMIT %(limit)s OFFSET %(offset)s
-                """,
+                sql.SQL(
+                    """
+                        SELECT driver_id, first_name, last_name, license_number, hired_at
+                        FROM projectfall2026.driver
+                        {filters}
+                        ORDER BY driver_id
+                        LIMIT %(limit)s OFFSET %(offset)s
+                    """
+                ).format(filters=_DRIVER_FILTERS),
                 {
                     "name": name,
                     "license_number": license_number,
@@ -89,6 +96,21 @@ class DriverDAO:
                 },
             )
             return cursor.fetchall()
+
+    def count_drivers(
+        self,
+        *,
+        name: str | None = None,
+        license_number: str | None = None,
+    ) -> int:
+        """Count drivers matching the supplied filters before pagination."""
+        with get_connection() as conn:
+            return conn.execute(
+                sql.SQL("SELECT count(*) FROM projectfall2026.driver {filters}").format(
+                    filters=_DRIVER_FILTERS
+                ),
+                {"name": name, "license_number": license_number},
+            ).fetchone()[0]
 
     def create_driver(
         self,

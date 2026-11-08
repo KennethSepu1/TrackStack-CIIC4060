@@ -7,6 +7,15 @@ from psycopg.rows import dict_row
 from backend.db import get_connection
 
 
+_ASSIGNMENT_FILTERS = sql.SQL(
+    """
+    WHERE (%(vehicle_id)s::bigint IS NULL OR vehicle_id = %(vehicle_id)s)
+      AND (%(driver_id)s::bigint IS NULL OR driver_id = %(driver_id)s)
+      AND (%(active)s::boolean IS NULL OR (assigned_to IS NULL) = %(active)s)
+    """
+)
+
+
 class InvalidAssignmentReferenceError(ValueError):
     """The vehicle or driver referenced by the assignment does not exist."""
 
@@ -18,6 +27,16 @@ class InvalidAssignmentTimeError(ValueError):
 def _validate_reference_id(field: str, value: int | None) -> None:
     if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
         raise ValueError(f"{field} must be a positive integer.")
+
+
+def _assignment_filter_params(
+    vehicle_id: int | None, driver_id: int | None, active: bool | None
+) -> dict[str, int | bool | None]:
+    if vehicle_id is not None:
+        _validate_reference_id("vehicle_id", vehicle_id)
+    if driver_id is not None:
+        _validate_reference_id("driver_id", driver_id)
+    return {"vehicle_id": vehicle_id, "driver_id": driver_id, "active": active}
 
 
 def _validate_interval(
@@ -57,31 +76,39 @@ class VehicleAssignmentDAO:
         active: bool | None = None,
     ):
         """Return assignment history matching all supplied filters."""
-        if vehicle_id is not None:
-            _validate_reference_id("vehicle_id", vehicle_id)
-        if driver_id is not None:
-            _validate_reference_id("driver_id", driver_id)
-        params = {
-            "vehicle_id": vehicle_id,
-            "driver_id": driver_id,
-            "active": active,
-            "limit": limit,
-            "offset": offset,
-        }
+        params = _assignment_filter_params(vehicle_id, driver_id, active)
+        params.update(limit=limit, offset=offset)
         with get_connection() as conn, conn.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
-                """
-                SELECT assignment_id, vehicle_id, driver_id, assigned_from, assigned_to
-                FROM projectfall2026.vehicle_assignment
-                WHERE (%(vehicle_id)s::bigint IS NULL OR vehicle_id = %(vehicle_id)s)
-                  AND (%(driver_id)s::bigint IS NULL OR driver_id = %(driver_id)s)
-                  AND (%(active)s::boolean IS NULL OR (assigned_to IS NULL) = %(active)s)
-                ORDER BY assignment_id
-                LIMIT %(limit)s OFFSET %(offset)s
-                """,
+                sql.SQL(
+                    """
+                        SELECT assignment_id, vehicle_id, driver_id, assigned_from, assigned_to
+                        FROM projectfall2026.vehicle_assignment
+                        {filters}
+                        ORDER BY assignment_id
+                        LIMIT %(limit)s OFFSET %(offset)s
+                    """
+                ).format(filters=_ASSIGNMENT_FILTERS),
                 params,
             )
             return cursor.fetchall()
+
+    def count_vehicle_assignments(
+        self,
+        *,
+        vehicle_id: int | None = None,
+        driver_id: int | None = None,
+        active: bool | None = None,
+    ) -> int:
+        """Count assignments matching all supplied filters before pagination."""
+        params = _assignment_filter_params(vehicle_id, driver_id, active)
+        with get_connection() as conn:
+            return conn.execute(
+                sql.SQL(
+                    "SELECT count(*) FROM projectfall2026.vehicle_assignment {filters}"
+                ).format(filters=_ASSIGNMENT_FILTERS),
+                params,
+            ).fetchone()[0]
 
     def create_vehicle_assignment(
         self,
