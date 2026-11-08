@@ -27,17 +27,22 @@ python -m ETL inspect
 
 ## Test database
 
-Start the Docker database and load the dataset:
+Build the local Docker database to match Render:
 
 ```sh
-docker compose -p ciic4060-stage2 up -d --wait
-docker compose -p ciic4060-stage2 exec -T db psql -v ON_ERROR_STOP=1 -U etl_test -d ciic4060_test < tests/schema.sql
+scripts/setup_test_db.sh
 export DATABASE_URL='postgresql://etl_test:local_test_only@127.0.0.1:55433/ciic4060_test'
-python -m ETL load
-python -m ETL validate
+python -m ETL validate --schema projectfall2026
 ```
 
-The container runs PostgreSQL 17 and PostGIS 3.5 on local port `55433`. The SQL command creates any missing tables. Apple Silicon uses `linux/amd64` emulation.
+The script removes any existing test container and volume, then:
+
+1. starts PostgreSQL 17 and PostGIS 3.5 on local port `55433` with `compose.yaml`
+2. loads the Phase I data into `public` with `python -m ETL load`
+3. runs [SQL/phase2_schema_and_ids.sql](SQL/phase2_schema_and_ids.sql)
+4. checks that the 11 tables are in `projectfall2026` and that the seven ID columns are identity columns, then runs [SQL/verify_phase2_ids.sql](SQL/verify_phase2_ids.sql), which rolls back its test rows
+
+Rerunning the script rebuilds the database from scratch. It always connects to the Docker URL above, even when `DATABASE_URL` points somewhere else. It uses `.venv/bin/python` when that exists; set `PYTHON` to use another interpreter. Apple Silicon uses `linux/amd64` emulation.
 
 ## Loading and validation
 
@@ -99,22 +104,13 @@ The Render schema checks and data validation passed for all 11 tables and 32,752
 
 ## Phase II schema migration (Docker)
 
-From the repository root, start with the local Docker database initialized with
-the Phase I `public` tables. Set `DATABASE_URL` to your local Docker connection
-in PowerShell before running these commands.
+[scripts/setup_test_db.sh](scripts/setup_test_db.sh) applies the migration to
+Docker as part of the [Test database](#test-database) setup. The migration moves
+the 11 project tables to `projectfall2026` and adds generated IDs to seven API
+tables while preserving explicit ETL IDs. It can only run once per database, so
+the script rebuilds the database on every run.
 
-```powershell
-.\.venv\Scripts\python.exe -m ETL load --schema public
-Get-Content -Raw .\SQL\phase2_schema_and_ids.sql | docker compose -p ciic4060-stage2 exec -T db psql -X -v ON_ERROR_STOP=1 -U etl_test -d ciic4060_test -f -
-.\.venv\Scripts\python.exe -m ETL validate --schema projectfall2026
-Get-Content -Raw .\SQL\verify_phase2_ids.sql | docker compose -p ciic4060-stage2 exec -T db psql -X -v ON_ERROR_STOP=1 -U etl_test -d ciic4060_test -f -
-```
-
-Run the migration once. It moves the 11 project tables to `projectfall2026`
-and adds generated IDs to seven API tables while preserving explicit ETL IDs.
-
-Docker verification matched 32,752 official rows and passed all seven ID
-checks. The ID check rolls back its test rows.
+On Windows, run `scripts/setup_test_db.sh` from Git Bash or WSL.
 
 ### Render verification
 
