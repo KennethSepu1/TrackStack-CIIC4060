@@ -24,22 +24,43 @@ _ROAD_FILTERS = sql.SQL(
     AND (%(max_speed_kph)s::bigint IS NULL OR speed_limit_kph <= %(max_speed_kph)s)
     """
 )
+_ROAD_LIST_FILTERS = sql.SQL(
+    """
+    {}
+    AND (
+        %(min_lon)s::double precision IS NULL
+        OR ST_Intersects(geom, ST_MakeEnvelope(
+            %(min_lon)s, %(min_lat)s, %(max_lon)s, %(max_lat)s, 4326
+        ))
+    )
+    """
+).format(_ROAD_FILTERS)
 _FEATURE_PROPERTIES = (
     "road_id", "name", "speed_limit_kph", "is_oneway", "direction", "created_at"
 )
 
 
-def _filter_params(limit, offset, name, min_speed_kph, max_speed_kph):
-    params = list_parameters(limit, offset, name)
+def _speed_filter_params(min_speed_kph, max_speed_kph):
     minimum = normalize_nonnegative_bigint(min_speed_kph, "min_speed_kph")
     maximum = normalize_nonnegative_bigint(max_speed_kph, "max_speed_kph")
     if minimum is not None and maximum is not None and minimum > maximum:
         raise ValueError("min_speed_kph cannot exceed max_speed_kph.")
     return {
-        **params,
         "min_speed_kph": minimum,
         "max_speed_kph": maximum,
     }
+
+
+def _filter_params(limit, offset, name, min_speed_kph, max_speed_kph):
+    return {
+        **list_parameters(limit, offset, name),
+        **_speed_filter_params(min_speed_kph, max_speed_kph),
+    }
+
+
+def _bbox_params(bbox):
+    min_lon, min_lat, max_lon, max_lat = normalize_bbox(bbox)
+    return dict(min_lon=min_lon, min_lat=min_lat, max_lon=max_lon, max_lat=max_lat)
 
 
 def _normalize_oneway(value: bool | None) -> bool | None:
@@ -77,26 +98,41 @@ class RoadSegmentDAO:
     ):
         """Return a stable page of road summaries matching all supplied filters."""
         params = _filter_params(limit, offset, name, min_speed_kph, max_speed_kph)
-        min_lon, min_lat, max_lon, max_lat = normalize_bbox(bbox)
-        params.update(min_lon=min_lon, min_lat=min_lat, max_lon=max_lon, max_lat=max_lat)
+        params.update(_bbox_params(bbox))
         query = sql.SQL(
             """
             SELECT road_id, name, speed_limit_kph, created_at
             FROM projectfall2026.road_segment
             WHERE {}
-              AND (
-                  %(min_lon)s::double precision IS NULL
-                  OR ST_Intersects(geom, ST_MakeEnvelope(
-                      %(min_lon)s, %(min_lat)s, %(max_lon)s, %(max_lat)s, 4326
-                  ))
-              )
             ORDER BY road_id
             LIMIT %(limit)s OFFSET %(offset)s
             """
-        ).format(_ROAD_FILTERS)
+        ).format(_ROAD_LIST_FILTERS)
         with get_connection() as conn, conn.cursor(row_factory=dict_row) as cursor:
             cursor.execute(query, params)
             return cursor.fetchall()
+
+    def count_road_segments(
+        self,
+        *,
+        name: str | None = None,
+        min_speed_kph: int | None = None,
+        max_speed_kph: int | None = None,
+        bbox: tuple[float, float, float, float] | None = None,
+    ) -> int:
+        """Return the number of roads matching the regular list filters."""
+        if name is not None and not isinstance(name, str):
+            raise ValueError("name filter must be text.")
+        params = {
+            "name": name,
+            **_speed_filter_params(min_speed_kph, max_speed_kph),
+            **_bbox_params(bbox),
+        }
+        query = sql.SQL(
+            "SELECT count(*) FROM projectfall2026.road_segment WHERE {}"
+        ).format(_ROAD_LIST_FILTERS)
+        with get_connection() as conn:
+            return conn.execute(query, params).fetchone()[0]
 
     def create_road_segment(
         self,

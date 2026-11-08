@@ -14,6 +14,22 @@ from backend.db import get_connection
 _DETAIL_FIELDS = sql.SQL(
     "parking_area_id, name, capacity, ST_AsGeoJSON(geom)::jsonb AS geom, created_at"
 )
+_PARKING_FILTERS = sql.SQL(
+    """
+    (%(name)s::text IS NULL OR strpos(lower(name), lower(%(name)s)) > 0)
+    AND (
+        %(min_lon)s::double precision IS NULL
+        OR ST_Intersects(geom, ST_MakeEnvelope(
+            %(min_lon)s, %(min_lat)s, %(max_lon)s, %(max_lat)s, 4326
+        ))
+    )
+    """
+)
+
+
+def _bbox_params(bbox):
+    min_lon, min_lat, max_lon, max_lat = normalize_bbox(bbox)
+    return dict(min_lon=min_lon, min_lat=min_lat, max_lon=max_lon, max_lat=max_lat)
 
 
 class ParkingAreaDAO:
@@ -36,37 +52,35 @@ class ParkingAreaDAO:
     ):
         """Return a page of summaries for parking areas that match the filters."""
         params = list_parameters(limit, offset, name)
-        min_lon, min_lat, max_lon, max_lat = normalize_bbox(bbox)
+        params.update(_bbox_params(bbox))
+        query = sql.SQL(
+            """
+            SELECT parking_area_id, name, capacity, created_at
+            FROM projectfall2026.parking_area
+            WHERE {}
+            ORDER BY parking_area_id
+            LIMIT %(limit)s OFFSET %(offset)s
+            """
+        ).format(_PARKING_FILTERS)
         with get_connection() as conn, conn.cursor(row_factory=dict_row) as cursor:
-            cursor.execute(
-                """
-                SELECT parking_area_id, name, capacity, created_at
-                FROM projectfall2026.parking_area
-                WHERE (
-                    %(name)s::text IS NULL
-                    OR strpos(lower(name), lower(%(name)s)) > 0
-                )
-                  AND (
-                      %(min_lon)s::double precision IS NULL
-                      OR ST_Intersects(
-                          geom,
-                          ST_MakeEnvelope(
-                              %(min_lon)s, %(min_lat)s, %(max_lon)s, %(max_lat)s, 4326
-                          )
-                      )
-                  )
-                ORDER BY parking_area_id
-                LIMIT %(limit)s OFFSET %(offset)s
-                """,
-                {
-                    **params,
-                    "min_lon": min_lon,
-                    "min_lat": min_lat,
-                    "max_lon": max_lon,
-                    "max_lat": max_lat,
-                },
-            )
+            cursor.execute(query, params)
             return cursor.fetchall()
+
+    def count_parking_areas(
+        self,
+        *,
+        name: str | None = None,
+        bbox: tuple[float, float, float, float] | None = None,
+    ) -> int:
+        """Return the number of parking areas matching the list filters."""
+        if name is not None and not isinstance(name, str):
+            raise ValueError("name filter must be text.")
+        params = {"name": name, **_bbox_params(bbox)}
+        query = sql.SQL(
+            "SELECT count(*) FROM projectfall2026.parking_area WHERE {}"
+        ).format(_PARKING_FILTERS)
+        with get_connection() as conn:
+            return conn.execute(query, params).fetchone()[0]
 
     def create_parking_area(self, *, name: str, geom: dict, capacity: int | None = None):
         """Insert a parking area and return it with its generated ID."""

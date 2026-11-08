@@ -10,6 +10,41 @@ from psycopg.types.json import Jsonb
 
 from psycopg import sql
 
+
+_PING_TIME_FILTERS = sql.SQL(
+    "(%(from_ts)s::timestamp IS NULL OR ts >= %(from_ts)s) "
+    "AND (%(to_ts)s::timestamp IS NULL OR ts <= %(to_ts)s)"
+)
+_PING_FILTERS = sql.SQL(
+    """
+    (%(vehicle_id)s::bigint IS NULL OR vehicle_id = %(vehicle_id)s)
+    AND {}
+    AND (
+        %(min_lon)s::double precision IS NULL
+        OR ST_Intersects(
+            geom,
+            ST_MakeEnvelope(
+                %(min_lon)s, %(min_lat)s, %(max_lon)s, %(max_lat)s, 4326
+            )
+        )
+    )
+    """
+).format(_PING_TIME_FILTERS)
+
+
+def _list_filter_params(vehicle_id, from_ts, to_ts, bbox):
+    min_lon, min_lat, max_lon, max_lat = bbox or (None, None, None, None)
+    return {
+        "vehicle_id": vehicle_id,
+        "from_ts": from_ts,
+        "to_ts": to_ts,
+        "min_lon": min_lon,
+        "min_lat": min_lat,
+        "max_lon": max_lon,
+        "max_lat": max_lat,
+    }
+
+
 class InvalidPingVehicleError(ValueError):
     """The vehicle referenced by the ping does not exist."""
 
@@ -39,44 +74,40 @@ class LocationPingDAO:
         bbox: tuple[float, float, float, float] | None = None,
     ):
         """Return a page of ping summaries matching the supplied filters."""
-        min_lon, min_lat, max_lon, max_lat = bbox or (None, None, None, None)
-        params = {
-            "limit": limit,
-            "offset": offset,
-            "vehicle_id": vehicle_id,
-            "from_ts": from_ts,
-            "to_ts": to_ts,
-            "min_lon": min_lon,
-            "min_lat": min_lat,
-            "max_lon": max_lon,
-            "max_lat": max_lat,
-        }
+        params = _list_filter_params(vehicle_id, from_ts, to_ts, bbox)
+        params.update(limit=limit, offset=offset)
 
         with get_connection() as conn, conn.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
-                """
-                SELECT ping_id, vehicle_id, ts, speed_kph, heading_deg
-                FROM projectfall2026.location_ping
-                WHERE (%(vehicle_id)s::bigint IS NULL
-                       OR vehicle_id = %(vehicle_id)s)
-                  AND (%(from_ts)s::timestamp IS NULL OR ts >= %(from_ts)s)
-                  AND (%(to_ts)s::timestamp IS NULL OR ts <= %(to_ts)s)
-                  AND (
-                      %(min_lon)s::double precision IS NULL
-                      OR ST_Intersects(
-                          geom,
-                          ST_MakeEnvelope(
-                              %(min_lon)s, %(min_lat)s,
-                              %(max_lon)s, %(max_lat)s, 4326
-                          )
-                      )
-                  )
-                ORDER BY ping_id
-                LIMIT %(limit)s OFFSET %(offset)s
-                """,
+                sql.SQL(
+                    """
+                    SELECT ping_id, vehicle_id, ts, speed_kph, heading_deg
+                    FROM projectfall2026.location_ping
+                    WHERE {}
+                    ORDER BY ping_id
+                    LIMIT %(limit)s OFFSET %(offset)s
+                    """
+                ).format(_PING_FILTERS),
                 params,
             )
             return cursor.fetchall()
+
+    def count_location_pings(
+        self,
+        *,
+        vehicle_id: int | None = None,
+        from_ts: datetime | None = None,
+        to_ts: datetime | None = None,
+        bbox: tuple[float, float, float, float] | None = None,
+    ) -> int:
+        """Count rows matching the list filters before pagination."""
+        params = _list_filter_params(vehicle_id, from_ts, to_ts, bbox)
+        query = sql.SQL(
+            "SELECT count(*) FROM projectfall2026.location_ping WHERE {}"
+        ).format(_PING_FILTERS)
+        with get_connection() as conn:
+            return conn.execute(query, params).fetchone()[0]
+
     def create_location_ping(
         self,
         *,
@@ -168,26 +199,52 @@ class LocationPingDAO:
 
         with get_connection() as conn, conn.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
-                """
-                SELECT ping.ping_id, ping.ts,
-                       ST_AsGeoJSON(ping.geom)::jsonb AS geom,
-                       ping.speed_kph, ping.heading_deg
-                FROM projectfall2026.vehicle AS vehicle
-                LEFT JOIN LATERAL (
-                    SELECT ping_id, ts, geom, speed_kph, heading_deg
-                    FROM projectfall2026.location_ping
-                    WHERE vehicle_id = vehicle.vehicle_id
-                      AND (%(from_ts)s::timestamp IS NULL OR ts >= %(from_ts)s)
-                      AND (%(to_ts)s::timestamp IS NULL OR ts <= %(to_ts)s)
-                    ORDER BY ping_id
-                    LIMIT %(limit)s OFFSET %(offset)s
-                ) AS ping ON TRUE
-                WHERE vehicle.vehicle_id = %(vehicle_id)s
-                ORDER BY ping.ping_id
-                """,
+                sql.SQL(
+                    """
+                    SELECT ping.ping_id, ping.ts,
+                           ST_AsGeoJSON(ping.geom)::jsonb AS geom,
+                           ping.speed_kph, ping.heading_deg
+                    FROM projectfall2026.vehicle AS vehicle
+                    LEFT JOIN LATERAL (
+                        SELECT ping_id, ts, geom, speed_kph, heading_deg
+                        FROM projectfall2026.location_ping
+                        WHERE vehicle_id = vehicle.vehicle_id
+                          AND {}
+                        ORDER BY ping_id
+                        LIMIT %(limit)s OFFSET %(offset)s
+                    ) AS ping ON TRUE
+                    WHERE vehicle.vehicle_id = %(vehicle_id)s
+                    ORDER BY ping.ping_id
+                    """
+                ).format(_PING_TIME_FILTERS),
                 params,
             )
             rows = cursor.fetchall()
             if not rows:
                 return None
             return [] if rows[0]["ping_id"] is None else rows
+
+    def count_vehicle_pings(
+        self,
+        vehicle_id: int,
+        *,
+        from_ts: datetime | None = None,
+        to_ts: datetime | None = None,
+    ) -> int | None:
+        """Count matching rows for a vehicle, or return None if it is missing."""
+        query = sql.SQL(
+            """
+            SELECT (
+                SELECT count(*)
+                FROM projectfall2026.location_ping
+                WHERE vehicle_id = vehicle.vehicle_id
+                  AND {}
+            )
+            FROM projectfall2026.vehicle AS vehicle
+            WHERE vehicle.vehicle_id = %(vehicle_id)s
+            """
+        ).format(_PING_TIME_FILTERS)
+        params = {"vehicle_id": vehicle_id, "from_ts": from_ts, "to_ts": to_ts}
+        with get_connection() as conn:
+            row = conn.execute(query, params).fetchone()
+            return None if row is None else row[0]
