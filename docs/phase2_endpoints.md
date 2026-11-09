@@ -1,6 +1,6 @@
 # Phase II Endpoints
 
-Source: `p2specsFall2026.pdf`. Base path `/api/v1`, schema `projectfall2026`. Field names and status codes are copied from the spec. Where the spec is silent, the row says so.
+Source: `p2specsFall2026.pdf`. Base path `/api/v1`, schema `projectfall2026`. Field names and status codes follow the spec. Where the spec is silent, the row says so.
 
 ## Endpoints
 
@@ -16,7 +16,7 @@ Source: `p2specsFall2026.pdf`. Base path `/api/v1`, schema `projectfall2026`. Fi
 | GET | `/api/v1/road-segments` | None. Query: `limit`, `offset` (non-negative integers), `name`, speed range, `bbox` (four numbers minLon,minLat,maxLon,maxLat, WGS84 ranges, min < max) | 200 (not listed in spec) | 400 (not listed in spec) | `{items: [{road_id, name, speed_limit_kph, created_at}], limit, offset, count}` |
 | GET | `/api/v1/road-segments/{road_id}` | Path: `road_id` (positive integer) | 200 | 404 | `{road_id, name, speed_limit_kph, geom, created_at}` |
 | PUT | `/api/v1/road-segments/{road_id}` | Path: `road_id`. Body: at least one of `name`, `speed_limit_kph` (>= 0), `is_oneway`, `direction`, `geom` (valid LineString, SRID 4326) | 200 | 400, 404 | `{road_id, name, speed_limit_kph, geom, created_at}` |
-| DELETE | `/api/v1/road-segments/{road_id}` and `/api/v1/road-segments/{road_id}/remove` | Path: `road_id` (must exist) | 200 | 404 | `{message: "Road segment deleted successfully.", road_id}` |
+| DELETE | `/api/v1/road-segments/{road_id}` | Path: `road_id` (must exist) | 200 | 404 | `{message: "Road segment deleted successfully.", road_id}` |
 | GET | `/api/v1/road-segments/geojson` | None. Query: `limit`, `offset` (non-negative integers), `name` (case-insensitive partial match), `min_speed_kph`, `max_speed_kph` (`min_speed_kph` <= `max_speed_kph`). No `bbox` | 200 | 400, 422, 500 | `application/geo+json`: `{type: "FeatureCollection", count, limit, offset, features: [{type: "Feature", geometry: LineString, properties: {road_id, name, speed_limit_kph, is_oneway, direction, created_at}}]}` |
 | POST | `/api/v1/parking-areas` | Body: `name` (non-empty), `geom` (valid closed Polygon, SRID 4326). Optional: `capacity` (>= 0) | 201 | 400 | `{parking_area_id, name, capacity, geom, created_at}` |
 | GET | `/api/v1/parking-areas` | None. Query: `limit`, `offset` (non-negative integers), `name`, `bbox` (four numbers minLon,minLat,maxLon,maxLat, WGS84 ranges, min < max) | 200 | 400 | `{items: [{parking_area_id, name, capacity, created_at}], limit, offset, count}` |
@@ -52,7 +52,7 @@ Spec notes:
 - The spec puts the bbox rule under `GET /api/v1/road-segments/{road_id}`, but it applies to the list endpoint, because the by-ID route takes no `bbox`.
 
 - The spec gives no status table for `GET /api/v1/road-segments`. The 200 and 400 in that row follow the other list endpoints. The spec names the speed range filter but not its parameters. The DAO uses `min_speed_kph` and `max_speed_kph`, the same names as the GeoJSON route.
-- `GET /api/v1/road-segments/{road_id}` and `PUT` return `is_oneway` and `direction` from the DAO, but the spec examples for those two leave them out. The extra keys are probably harmless, but the team should decide whether to drop them.
+- GET and PUT road-segment responses contain only `road_id`, `name`, `speed_limit_kph`, `geom`, and `created_at`. POST and GeoJSON also include `is_oneway` and `direction`.
 - The vehicle list example sends `limit=0`, but its response shows `"limit": 20`, so the spec doesn't settle what `limit=0` returns. The proposed answer is to accept it, since it's a non-negative integer, and return `"items": []`, `"limit": 0` and the full `count`. The team should confirm.
 - `status` on `GET /api/v1/vehicles` may be a status name or a status ID. The DAO accepts both.
 
@@ -79,7 +79,7 @@ Cases to test: `LineString` type, one coordinate, three coordinates, a string co
 
 ### bbox validation
 
-The `bbox` parameter is accepted on `GET /api/v1/road-segments`, `GET /api/v1/parking-areas` and `GET /api/v1/location-pings`. The GeoJSON route doesn't accept it. The spec doesn't say whether sending one there should return 400 or be ignored. FastAPI ignores unknown query parameters by default.
+The `bbox` parameter is accepted on `GET /api/v1/road-segments`, `GET /api/v1/parking-areas` and `GET /api/v1/location-pings`. The GeoJSON route rejects it with HTTP 400.
 
 - Format is `bbox=minLon,minLat,maxLon,maxLat`, with exactly four comma-separated values that are finite numbers.
 - Longitude must be in [-180, 180] and latitude in [-90, 90].
@@ -119,13 +119,9 @@ The rule: use 422 where the endpoint lists 422 for an invalid field (PUT trips, 
 - Every timestamp in a response ends in `Z`, for example `2026-03-14T10:00:00Z`. That applies to `created_at`, `last_ts`, `ts`, `start_ts`, `end_ts`, `hired_at`, `assigned_from` and `assigned_to`; a null `assigned_to` stays `null`. Some spec examples leave out the `Z` (PUT vehicle `created_at`, the road segment and parking area `created_at`, and the POST ping `ts`). Rule 4 and "Use RFC 3339 format for every timestamp" take precedence.
 - The DAOs return naive `datetime` values from `TIMESTAMP` columns, and FastAPI serializes them without `Z`. The handler has to format them.
 - On input, accept both `Z` and explicit offsets. Convert to UTC, drop `tzinfo`, and pass a naive value to the DAO. For example, `2026-03-14T11:30:00-04:00` is stored as `2026-03-14 15:30:00` and returned as `2026-03-14T15:30:00Z`.
-- Naive input: the spec's own examples send naive values (`ts` on POST location-pings, and `from_ts`/`to_ts` on GET location-pings). Treating naive input as UTC keeps those example requests working. The team should confirm this.
-- A timestamp that doesn't parse, such as `2026-13-01T00:00:00Z` or `yesterday`, returns 422 on POST and PUT drivers and on PUT trips, and 400 everywhere else.
+- Input timestamps require `Z` or a valid numeric timezone offset. Fractional seconds are truncated to microsecond precision for storage.
+- A timestamp that doesn't parse, such as `2026-13-01T00:00:00Z` or `yesterday`, returns 422 on POST and PUT drivers and assignments and on PUT trips. Pings, POST trips, and time filters return 400.
 - `from_ts` later than `to_ts` returns 400. Equal values are allowed.
-
-### Both DELETE paths for road segments
-
-The rendered heading in the spec shows `DELETE /api/v1/road-segments/{road_id}`, but the PDF's text layer for the same heading reads `DELETE /api/v1/road-segments/{road_id}/remove`. Register both paths with the same handler and response. They count as one endpoint, since the total of 39 only works if this endpoint is counted once.
 
 ### 204 with no body on current-location
 
@@ -207,7 +203,7 @@ The rendered heading in the spec shows `DELETE /api/v1/road-segments/{road_id}`,
 - It validates `name`, `speed_limit_kph`, `is_oneway`, `direction`, LineString shape and `ST_IsValid`, and raises `ValueError`, which maps to 400. Speeds must be integers, so `60.0` is rejected.
 - `list_road_segments` expects `bbox` as a tuple of four numbers. The handler parses the query string, and text that isn't a number returns 400.
 - For `get_road_segments_geojson`: the handler checks types and ranges first (422), then maps the DAO's `ValueError` for `min_speed_kph > max_speed_kph` to 400. A global 400 handler for validation errors must not override the 422 on this route.
-- `delete_road_segment` serves both DELETE paths. Nothing references `road_segment`, so there is no 409.
+- `delete_road_segment` serves `DELETE /api/v1/road-segments/{road_id}`. Nothing references `road_segment`, so there is no 409.
 
 ### parking_area.py
 

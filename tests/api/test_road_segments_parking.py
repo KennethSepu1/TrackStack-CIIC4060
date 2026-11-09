@@ -1,5 +1,4 @@
 import pytest
-
 from support import (
     INVALID_BBOXES,
     MALFORMED_BODIES,
@@ -16,7 +15,6 @@ from support import (
 
 ROAD_FIELDS = {"road_id", "name", "speed_limit_kph", "is_oneway", "direction", "geom", "created_at"}
 ROAD_DETAIL_FIELDS = {"road_id", "name", "speed_limit_kph", "geom", "created_at"}
-ROAD_EXTRAS = {"is_oneway", "direction"}
 ROAD_ITEM_FIELDS = {"road_id", "name", "speed_limit_kph", "created_at"}
 FEATURE_PROPERTIES = {"road_id", "name", "speed_limit_kph", "is_oneway", "direction", "created_at"}
 COLLECTION_FIELDS = {"type", "count", "limit", "offset", "features"}
@@ -81,7 +79,7 @@ def road_detail(body):
 
 
 def assert_road_detail(body):
-    assert set(body) - ROAD_EXTRAS == ROAD_DETAIL_FIELDS
+    assert set(body) == ROAD_DETAIL_FIELDS
     assert_line(body["geom"])
     assert_utc(body["created_at"])
 
@@ -181,9 +179,9 @@ class TestRoadSegments:
     def test_get_missing_road_segment(self, api):
         assert api.get(f"/road-segments/{MISSING_ID}").status_code == 404
 
-    def test_decision_road_segment_extra_keys(self, api, existing_road):
+    def test_road_segment_detail_fields(self, api, existing_road):
         body = api.get(f"/road-segments/{existing_road['road_id']}").json()
-        assert set(body) == ROAD_DETAIL_FIELDS | ROAD_EXTRAS
+        assert set(body) == ROAD_DETAIL_FIELDS
 
     @pytest.mark.writes
     def test_create_road_segment(self, api, cleanup):
@@ -311,18 +309,16 @@ class TestRoadSegments:
         assert road_detail(api.get(f"/road-segments/{road['road_id']}").json()) == road_detail(road)
 
     @pytest.mark.writes
-    @pytest.mark.parametrize("suffix", ["", "/remove"])
-    def test_delete_road_segment(self, api, make_road, suffix):
+    def test_delete_road_segment(self, api, make_road):
         road = make_road()
-        response = api.delete(f"/road-segments/{road['road_id']}{suffix}")
+        response = api.delete(f"/road-segments/{road['road_id']}")
         assert response.status_code == 200
         assert response.json() == {"message": "Road segment deleted successfully.", "road_id": road["road_id"]}
         assert api.get(f"/road-segments/{road['road_id']}").status_code == 404
 
     @pytest.mark.writes
-    @pytest.mark.parametrize("suffix", ["", "/remove"])
-    def test_delete_missing_road_segment(self, api, suffix):
-        assert api.delete(f"/road-segments/{MISSING_ID}{suffix}").status_code == 404
+    def test_delete_missing_road_segment(self, api):
+        assert api.delete(f"/road-segments/{MISSING_ID}").status_code == 404
 
 
 class TestRoadSegmentsGeoJSON:
@@ -380,11 +376,10 @@ class TestRoadSegmentsGeoJSON:
     def test_geojson_rejects_invalid_query_types(self, api, params):
         assert api.get("/road-segments/geojson", params=params).status_code == 422
 
-    def test_decision_geojson_bbox(self, api):
-        plain = api.get("/road-segments/geojson", params={"limit": 1}).json()
-        response = api.get("/road-segments/geojson", params={"limit": 1, "bbox": TEST_BBOX})
-        assert response.status_code == 200
-        assert response.json()["count"] == plain["count"]
+    @pytest.mark.parametrize("bbox", [TEST_BBOX, "nonsense", ""])
+    def test_geojson_rejects_bbox(self, api, bbox):
+        response = api.get("/road-segments/geojson", params={"limit": 1, "bbox": bbox})
+        assert response.status_code == 400
 
     @pytest.mark.writes
     def test_geojson_returns_created_road(self, api, make_road):

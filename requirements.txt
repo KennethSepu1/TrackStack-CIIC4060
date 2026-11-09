@@ -1,4 +1,2 @@
 pyarrow==26.0.0
-psycopg[binary]==3.3.6
-fastapi==0.162.2
-uvicorn==0.54.0
+-r backend/requirements.txt
