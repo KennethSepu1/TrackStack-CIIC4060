@@ -124,7 +124,9 @@ connection string. Configure the Phase II backend to query `projectfall2026`.
 
 ## Phase II REST API
 
-Start the API against the Docker test database:
+The 39 endpoints under `/api/v1` use FastAPI routes → per-request handlers →
+existing DAOs. SQL stays in `backend/dao`; no ORM is used. Start locally after
+building the Docker test database:
 
 ```sh
 source .venv/bin/activate
@@ -133,8 +135,49 @@ export DATABASE_URL='postgresql://etl_test:local_test_only@127.0.0.1:55433/ciic4
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
-Routes use the `/api/v1` prefix and call handlers, which validate requests and
-use the existing DAOs. Run `python -m pytest tests/unit -q` for offline tests.
-Vehicle CRUD and current-location are available at `/api/v1/vehicles`.
-Pings, trips, drivers and vehicle assignments are also available. Timestamps
-are normalized to UTC; trip time filters include overlapping intervals.
+To run the API itself in Docker against the same disposable database:
+
+```sh
+docker build -t trackstack-phase2:local .
+docker run --rm --name trackstack-phase2-api \
+  --network ciic4060-stage2_default -p 127.0.0.1:8001:8000 \
+  -e DATABASE_URL='postgresql://etl_test:local_test_only@db:5432/ciic4060_test' \
+  trackstack-phase2:local
+```
+
+Use `API_BASE_URL=http://127.0.0.1:8001` for this container.
+
+In another terminal, run the complete tests, including CRUD writes:
+
+```sh
+source .venv/bin/activate
+export TEST_DATABASE_URL='postgresql://etl_test:local_test_only@127.0.0.1:55433/ciic4060_test'
+ALLOW_WRITES=1 API_BASE_URL=http://127.0.0.1:8000 python -m pytest -q
+```
+
+`tests/unit` runs offline. API mutation tests require explicit `ALLOW_WRITES=1`
+and a loopback API address. Point the running API at Docker before enabling
+writes. The full endpoint contract is in [docs/phase2_endpoints.md](docs/phase2_endpoints.md).
+
+Timestamps with offsets are normalized to UTC and returned with `Z`. Naive
+input timestamps are interpreted as UTC. PUT
+preserves omitted fields and accepts null only for optional fields. The default
+page size is 20 (15000 for road GeoJSON); zero returns an empty page and the
+full matching count. Trip time filters include intervals overlapping the
+requested range. The road GeoJSON route ignores unknown query parameters,
+including `bbox`; spatial bbox filtering belongs to the regular list route.
+
+### Render application setup
+
+The root `Dockerfile` runs the API as a non-root user and honors Render's `PORT`.
+It installs `backend/requirements.txt`; the root requirements also include PyArrow
+for the existing ETL.
+The `render.yaml` Blueprint defines the web service and `/health` readiness
+endpoint. Supply `DATABASE_URL` privately in Render, pointing to the migrated
+`projectfall2026` database. The application performs no migrations or data loads
+at startup. Keep production credentials out of Git and run mutation tests only
+against Docker.
+
+After deploying the repository on Render, use `/docs` for the route index and
+read-only GET requests to verify the service. Record the resulting public API
+URL here once deployment is verified; the Blueprint alone does not deploy it.

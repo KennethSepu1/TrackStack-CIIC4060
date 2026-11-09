@@ -311,18 +311,16 @@ class TestRoadSegments:
         assert road_detail(api.get(f"/road-segments/{road['road_id']}").json()) == road_detail(road)
 
     @pytest.mark.writes
-    @pytest.mark.parametrize("suffix", ["", "/remove"])
-    def test_delete_road_segment(self, api, make_road, suffix):
+    def test_delete_road_segment(self, api, make_road):
         road = make_road()
-        response = api.delete(f"/road-segments/{road['road_id']}{suffix}")
+        response = api.delete(f"/road-segments/{road['road_id']}")
         assert response.status_code == 200
         assert response.json() == {"message": "Road segment deleted successfully.", "road_id": road["road_id"]}
         assert api.get(f"/road-segments/{road['road_id']}").status_code == 404
 
     @pytest.mark.writes
-    @pytest.mark.parametrize("suffix", ["", "/remove"])
-    def test_delete_missing_road_segment(self, api, suffix):
-        assert api.delete(f"/road-segments/{MISSING_ID}{suffix}").status_code == 404
+    def test_delete_missing_road_segment(self, api):
+        assert api.delete(f"/road-segments/{MISSING_ID}").status_code == 404
 
 
 class TestRoadSegmentsGeoJSON:

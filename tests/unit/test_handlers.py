@@ -14,14 +14,14 @@ from backend.main import app
 client = TestClient(app)
 
 
-def test_tracking_and_assignment_operations_are_registered():
+def test_all_39_operations_are_registered():
     operations = {
         (method, path)
         for path, methods in app.openapi()["paths"].items()
         if path.startswith("/api/v1")
         for method in methods
     }
-    assert len(operations) == 28
+    assert len(operations) == 39
 
 
 @pytest.mark.parametrize("value", [True, "1", 1.5, 0, -1, 2**63])
@@ -111,7 +111,15 @@ def test_count_uses_unpaginated_filters(monkeypatch):
 
 @pytest.mark.parametrize(
     "path",
-    ["vehicles", "location-pings", "trips", "drivers", "vehicle-assignments"],
+    [
+        "vehicles",
+        "drivers",
+        "trips",
+        "road-segments",
+        "parking-areas",
+        "vehicle-assignments",
+        "location-pings",
+    ],
 )
 def test_unknown_update_field_returns_400(path):
     assert (
