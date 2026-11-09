@@ -1,2 +1,2 @@
 pyarrow==26.0.0
-psycopg[binary]==3.3.6
+-r backend/requirements.txt

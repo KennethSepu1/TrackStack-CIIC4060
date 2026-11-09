@@ -121,3 +121,18 @@ with SRID 4326.
 
 Set `DATABASE_URL` in the backend environment to the Render PostgreSQL
 connection string. Configure the Phase II backend to query `projectfall2026`.
+
+## Phase II REST API
+
+Start the API against the Docker test database:
+
+```sh
+source .venv/bin/activate
+python -m pip install -r requirements-dev.txt
+export DATABASE_URL='postgresql://etl_test:local_test_only@127.0.0.1:55433/ciic4060_test'
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
+
+Routes use the `/api/v1` prefix and call handlers, which validate requests and
+use the existing DAOs. Run `python -m pytest tests/unit -q` for offline tests.
+Vehicle CRUD and current-location are available at `/api/v1/vehicles`.
