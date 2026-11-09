@@ -1,0 +1,2 @@
+class VehicleHandler:
+    pass

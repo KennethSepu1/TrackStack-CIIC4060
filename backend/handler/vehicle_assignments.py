@@ -1,0 +1,2 @@
+class VehicleAssignmentHandler:
+    pass
