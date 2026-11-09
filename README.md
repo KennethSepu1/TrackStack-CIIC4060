@@ -172,12 +172,11 @@ bbox filtering belongs to the regular list route.
 The root `Dockerfile` runs the API as a non-root user and honors Render's `PORT`.
 It installs `backend/requirements.txt`; the root requirements also include PyArrow
 for the existing ETL.
-The `render.yaml` Blueprint defines the web service and `/health` readiness
-endpoint. Supply `DATABASE_URL` privately in Render, pointing to the migrated
-`projectfall2026` database. The application performs no migrations or data loads
-at startup. Keep production credentials out of Git and run mutation tests only
-against Docker.
+The `render.yaml` Blueprint links the web service to the existing Render
+PostgreSQL database over the private network. The API queries `projectfall2026`.
+The application performs no migrations or data loads at startup. Keep
+production credentials out of Git and run mutation tests only against Docker.
 
-After deploying the repository on Render, use `/docs` for the route index and
-read-only GET requests to verify the service. Record the resulting public API
-URL here once deployment is verified; the Blueprint alone does not deploy it.
+The deployed [TrackStack API](https://trackstack-api-lh8d.onrender.com/api/v1/vehicles)
+runs on Render. See [interactive API docs](https://trackstack-api-lh8d.onrender.com/docs)
+for the 39 operations under `/api/v1`.
