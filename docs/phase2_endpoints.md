@@ -53,7 +53,7 @@ Spec notes:
 
 - The spec gives no status table for `GET /api/v1/road-segments`. The 200 and 400 in that row follow the other list endpoints. The spec names the speed range filter but not its parameters. The DAO uses `min_speed_kph` and `max_speed_kph`, the same names as the GeoJSON route.
 - `GET /api/v1/road-segments/{road_id}` and `PUT` return `is_oneway` and `direction` from the DAO, but the spec examples for those two leave them out. The extra keys are probably harmless, but the team should decide whether to drop them.
-- The vehicle list example sends `limit=0`. Zero is a valid non-negative limit and must not return 400.
+- The vehicle list example sends `limit=0`, but its response shows `"limit": 20`, so the spec doesn't settle what `limit=0` returns. The proposed answer is to accept it, since it's a non-negative integer, and return `"items": []`, `"limit": 0` and the full `count`. The team should confirm.
 - `status` on `GET /api/v1/vehicles` may be a status name or a status ID. The DAO accepts both.
 
 ## Edge cases
