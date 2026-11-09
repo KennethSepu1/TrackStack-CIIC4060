@@ -5,10 +5,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from psycopg import Error as DatabaseError
 
-from backend.routes import vehicle
+from backend.routes import driver, location_ping, trip, vehicle, vehicle_assignment
 
 app = FastAPI(title="Car Tracking API", version="2.0.0")
-app.include_router(vehicle.router, prefix="/api/v1")
+for routes in (vehicle, location_ping, trip, driver, vehicle_assignment):
+    app.include_router(routes.router, prefix="/api/v1")
 
 
 @app.exception_handler(RequestValidationError)

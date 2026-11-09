@@ -136,3 +136,5 @@ python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 Routes use the `/api/v1` prefix and call handlers, which validate requests and
 use the existing DAOs. Run `python -m pytest tests/unit -q` for offline tests.
 Vehicle CRUD and current-location are available at `/api/v1/vehicles`.
+Pings, trips, drivers and vehicle assignments are also available. Timestamps
+are normalized to UTC; trip time filters include overlapping intervals.
