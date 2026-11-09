@@ -14,6 +14,7 @@ BIGINT_MAX = 2**63 - 1
 _TIMESTAMP = re.compile(
     r"[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?(?:[Zz]|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])"
 )
+_TIMESTAMP_OPTIONAL_ZONE = re.compile(_TIMESTAMP.pattern + "?")
 
 
 def integer(value: Any, field: str, minimum: int = 0) -> int:
@@ -25,9 +26,10 @@ def integer(value: Any, field: str, minimum: int = 0) -> int:
     return value
 
 
-def timestamp(value: Any) -> datetime:
-    """Require a timezone and normalize to UTC, truncating fractions to microseconds."""
-    if not isinstance(value, str) or not _TIMESTAMP.fullmatch(value):
+def timestamp(value: Any, allow_naive: bool = False) -> datetime:
+    """Normalize to naive UTC, truncating fractions to microseconds. A timezone is required unless allow_naive is set, in which case a timestamp without one is treated as UTC."""
+    pattern = _TIMESTAMP_OPTIONAL_ZONE if allow_naive else _TIMESTAMP
+    if not isinstance(value, str) or not pattern.fullmatch(value):
         raise ValueError("Expected an RFC 3339 timestamp.")
     result = datetime.fromisoformat(value.upper())
     if result.tzinfo is not None:
@@ -70,6 +72,7 @@ def query_parameters(
     *,
     status: int = 400,
     default_limit: int = 20,
+    allow_naive: bool = False,
 ) -> dict[str, Any]:
     """Parse pagination and resource filters; reject reversed time and speed ranges."""
     result: dict[str, Any] = {}
@@ -94,7 +97,7 @@ def query_parameters(
                     int(value), name, 1 if name.endswith("_id") else 0
                 )
             elif name in ("from_ts", "to_ts"):
-                result[name] = timestamp(value)
+                result[name] = timestamp(value, allow_naive)
             elif name == "bbox":
                 result[name] = normalize_bbox(tuple(float(n) for n in value.split(",")))
             elif name == "active":
@@ -120,6 +123,7 @@ def payload(
     status: int = 400,
     field_status: dict[str, int] | None = None,
     geometry_type: str = "Point",
+    allow_naive: bool = False,
 ) -> dict[str, Any]:
     """Validate supported fields, preserving explicit nulls and omitted update values."""
     unknown = data.keys() - set(fields)
@@ -157,7 +161,7 @@ def payload(
                 "assigned_from",
                 "assigned_to",
             ):
-                value = timestamp(value)
+                value = timestamp(value, allow_naive)
             elif name in ("geom", "start_geom", "end_geom"):
                 value = geometry(value, geometry_type)
             elif name == "is_oneway":

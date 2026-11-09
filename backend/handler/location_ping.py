@@ -24,6 +24,7 @@ class LocationPingHandler:
             ("vehicle_id", "ts", "geom"),
             status=400,
             geometry_type="Point",
+            allow_naive=True,
         )
         return response(
             call_dao(self.dao.create_location_ping, error_status=400, **values), 201
@@ -31,7 +32,9 @@ class LocationPingHandler:
 
     def list(self, query: Mapping[str, str]) -> JSONResponse:
         """Return a filtered page with the total count before pagination."""
-        params = query_parameters(query, ("vehicle_id", "from_ts", "to_ts", "bbox"))
+        params = query_parameters(
+            query, ("vehicle_id", "from_ts", "to_ts", "bbox"), allow_naive=True
+        )
         items = call_dao(self.dao.list_location_pings, **params)
         filters = {
             key: value
@@ -64,6 +67,7 @@ class LocationPingHandler:
             update=True,
             status=400,
             geometry_type="Point",
+            allow_naive=True,
         )
         return response(
             require_record(
@@ -88,7 +92,7 @@ class LocationPingHandler:
     def for_vehicle(self, vehicle_id: str, query: Mapping[str, str]) -> JSONResponse:
         """Return a vehicle's filtered pings, distinguishing missing from empty."""
         identifier = path_id(vehicle_id)
-        params = query_parameters(query, ("from_ts", "to_ts"))
+        params = query_parameters(query, ("from_ts", "to_ts"), allow_naive=True)
         items = require_record(
             call_dao(self.dao.list_vehicle_pings, identifier, **params)
         )

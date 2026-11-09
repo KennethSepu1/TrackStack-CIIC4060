@@ -186,13 +186,20 @@ class TestLocationPings:
         assert make_ping(ts="2026-03-14T05:58:20-04:00")["ts"] == TS
 
     @pytest.mark.writes
-    def test_rejects_timestamps_without_timezone(self, api, make_ping):
-        ping = make_ping()
-        response = api.put(f"/location-pings/{ping['ping_id']}", json={"ts": "2026-03-14T09:58:20"})
-        assert response.status_code == 400
-        assert api.get(f"/location-pings/{ping['ping_id']}").json()["ts"] == ping["ts"]
-        response = api.get("/location-pings", params={"from_ts": "2026-03-14T09:00:00"})
-        assert response.status_code == 400
+    def test_accepts_timestamps_without_timezone_as_utc(self, api, make_ping):
+        ping = make_ping(ts="2026-03-14T09:58:20")
+        assert ping["ts"] == TS
+        response = api.put(f"/location-pings/{ping['ping_id']}", json={"ts": "2026-03-14T10:15:00"})
+        assert response.status_code == 200
+        assert response.json()["ts"] == "2026-03-14T10:15:00Z"
+        assert api.get(f"/location-pings/{ping['ping_id']}").json()["ts"] == "2026-03-14T10:15:00Z"
+        window = {"from_ts": "2026-03-14T10:00:00", "to_ts": "2026-03-14T10:30:00"}
+        response = api.get("/location-pings", params={"vehicle_id": ping["vehicle_id"], **window})
+        assert response.status_code == 200
+        assert [item["ping_id"] for item in response.json()["items"]] == [ping["ping_id"]]
+        response = api.get(f"/vehicles/{ping['vehicle_id']}/pings", params=window)
+        assert response.status_code == 200
+        assert [item["ping_id"] for item in response.json()["items"]] == [ping["ping_id"]]
 
     @pytest.mark.writes
     @pytest.mark.parametrize("heading", [0, 359.9])

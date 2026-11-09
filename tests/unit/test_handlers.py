@@ -145,10 +145,11 @@ def test_timestamp_accepts_fractional_seconds_at_database_precision(value):
 
 @pytest.mark.parametrize(
     "invalid",
-    ["2026-03-14T09:00:00+00:99", "2026-03-14T09:00:00+01:60", "2026-03-14T09:00:00"],
+    ["2026-03-14T09:00:00+00:99", "2026-03-14T09:00:00+01:60", None],
+    ids=lambda value: value or "unparseable",
 )
 @pytest.mark.parametrize(
-    "resource,dao_path,method,field,data,status",
+    "resource,dao_path,method,field,data,status,unparseable",
     [
         (
             "drivers",
@@ -157,6 +158,7 @@ def test_timestamp_accepts_fractional_seconds_at_database_precision(value):
             "hired_at",
             {"first_name": "Ana", "last_name": "Ruiz", "license_number": "TEST"},
             422,
+            "2026-03-14T09:00:00",
         ),
         (
             "location-pings",
@@ -165,6 +167,7 @@ def test_timestamp_accepts_fractional_seconds_at_database_precision(value):
             "ts",
             {"vehicle_id": 1, "geom": {"type": "Point", "coordinates": [-67, 18]}},
             400,
+            "2026-13-01T00:00:00Z",
         ),
         (
             "trips",
@@ -173,6 +176,7 @@ def test_timestamp_accepts_fractional_seconds_at_database_precision(value):
             "start_ts",
             {"vehicle_id": 1, "end_ts": "2026-03-15T09:00:00Z"},
             400,
+            "2026-03-14T09:00:00",
         ),
         (
             "vehicle-assignments",
@@ -181,14 +185,15 @@ def test_timestamp_accepts_fractional_seconds_at_database_precision(value):
             "assigned_from",
             {"vehicle_id": 1, "driver_id": 1},
             422,
+            "2026-03-14T09:00:00",
         ),
     ],
 )
 def test_invalid_timestamp_does_not_write(
-    monkeypatch, invalid, resource, dao_path, method, field, data, status
+    monkeypatch, invalid, resource, dao_path, method, field, data, status, unparseable
 ):
     create = Mock()
     monkeypatch.setattr(f"{dao_path}.{method}", create)
-    result = client.post(f"/api/v1/{resource}", json={**data, field: invalid})
+    result = client.post(f"/api/v1/{resource}", json={**data, field: invalid or unparseable})
     assert result.status_code == status
     create.assert_not_called()
