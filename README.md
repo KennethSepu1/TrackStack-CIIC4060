@@ -25,15 +25,15 @@ The full endpoint contract is in [docs/phase2_endpoints.md](docs/phase2_endpoint
 
 ## Database access
 
-| Setting  | Value                    |
-| -------- | ------------------------ |
-| Host     | `<HOST>`                 |
-| Port     | `<PORT>`                 |
-| Database | `<DATABASE>`             |
-| User     | `<USER>`                 |
-| Password | `<PASSWORD>`             |
-| Schema   | `projectfall2026`        |
-| SSL mode | `require`                |
+| Setting  | Value                                                     |
+| -------- | --------------------------------------------------------- |
+| Host     | `dpg-db8p4eks728c73aic0f0-a.virginia-postgres.render.com` |
+| Port     | `5432`                                                    |
+| Database | `car_tracking_o82k`                                       |
+| User     | `car_tracking_o82k_user`                                  |
+| Password | Shared separately by email                                |
+| Schema   | `projectfall2026`                                         |
+| SSL mode | `require`                                                 |
 
 PostgreSQL 17 with PostGIS. Geometry is stored in SRID 4326.
 
