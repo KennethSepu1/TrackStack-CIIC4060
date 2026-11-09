@@ -15,7 +15,9 @@ from backend.routes import (
     vehicle_assignment,
 )
 
-app = FastAPI(title="Car Tracking API", version="2.0.0")
+API_PREFIX = "/api/v1"
+
+app = FastAPI(title="TrackStack Car Tracking API", version="2.0.0")
 for routes in (
     vehicle,
     location_ping,
@@ -25,7 +27,7 @@ for routes in (
     road_segment,
     parking_area,
 ):
-    app.include_router(routes.router, prefix="/api/v1")
+    app.include_router(routes.router, prefix=API_PREFIX)
 
 
 @app.exception_handler(RequestValidationError)

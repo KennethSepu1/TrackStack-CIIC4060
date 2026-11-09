@@ -1,0 +1,2 @@
+class RoadSegmentHandler:
+    pass
