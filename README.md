@@ -159,13 +159,13 @@ ALLOW_WRITES=1 API_BASE_URL=http://127.0.0.1:8000 python -m pytest -q
 and a loopback API address. Point the running API at Docker before enabling
 writes. The full endpoint contract is in [docs/phase2_endpoints.md](docs/phase2_endpoints.md).
 
-Timestamps with offsets are normalized to UTC and returned with `Z`. Naive
-input timestamps are interpreted as UTC. PUT
+Timestamps require a timezone, are normalized to UTC, and returned with `Z`.
+Fractional seconds are truncated to PostgreSQL microsecond precision. PUT
 preserves omitted fields and accepts null only for optional fields. The default
 page size is 20 (15000 for road GeoJSON); zero returns an empty page and the
 full matching count. Trip time filters include intervals overlapping the
-requested range. The road GeoJSON route ignores unknown query parameters,
-including `bbox`; spatial bbox filtering belongs to the regular list route.
+requested range. The road GeoJSON route rejects `bbox` with HTTP 400; spatial
+bbox filtering belongs to the regular list route.
 
 ### Render application setup
 

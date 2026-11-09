@@ -48,9 +48,18 @@ def test_point_rejects_nonfinite_or_non_numeric_coordinates(coordinate):
 
 @pytest.mark.parametrize(
     "value",
-    ["2026-03-14", "yesterday", "2026-13-14T00:00:00Z", "2026-01-01T00:00:00.1234567Z"],
+    [
+        "2026-03-14",
+        "yesterday",
+        "2026-13-14T00:00:00Z",
+        "2026-03-14T09:00:00+00:99",
+        "2026-03-14T09:00:00+01:60",
+        "2026-03-14T09:00:00-24:00",
+        "2026-03-14T09:00:00",
+        "2026-03-14 09:00:00Z",
+    ],
 )
-def test_timestamps_reject_invalid_or_lossy_values(value):
+def test_timestamps_reject_invalid_values(value):
     with pytest.raises(ValueError):
         timestamp(value)
 
@@ -125,3 +134,61 @@ def test_unknown_update_field_returns_400(path):
     assert (
         client.put(f"/api/v1/{path}/1", json={"unexpected": "value"}).status_code == 400
     )
+
+
+@pytest.mark.parametrize(
+    "value", ["2026-03-14T09:00:00.1234567Z", "2026-03-14t10:00:00.123456789+01:00"]
+)
+def test_timestamp_accepts_fractional_seconds_at_database_precision(value):
+    assert timestamp(value) == datetime(2026, 3, 14, 9, 0, 0, 123456)
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    ["2026-03-14T09:00:00+00:99", "2026-03-14T09:00:00+01:60", "2026-03-14T09:00:00"],
+)
+@pytest.mark.parametrize(
+    "resource,dao_path,method,field,data,status",
+    [
+        (
+            "drivers",
+            "backend.dao.driver.DriverDAO",
+            "create_driver",
+            "hired_at",
+            {"first_name": "Ana", "last_name": "Ruiz", "license_number": "TEST"},
+            422,
+        ),
+        (
+            "location-pings",
+            "backend.dao.location_ping.LocationPingDAO",
+            "create_location_ping",
+            "ts",
+            {"vehicle_id": 1, "geom": {"type": "Point", "coordinates": [-67, 18]}},
+            400,
+        ),
+        (
+            "trips",
+            "backend.dao.trip.TripDAO",
+            "create_trip",
+            "start_ts",
+            {"vehicle_id": 1, "end_ts": "2026-03-15T09:00:00Z"},
+            400,
+        ),
+        (
+            "vehicle-assignments",
+            "backend.dao.vehicle_assignment.VehicleAssignmentDAO",
+            "create_vehicle_assignment",
+            "assigned_from",
+            {"vehicle_id": 1, "driver_id": 1},
+            422,
+        ),
+    ],
+)
+def test_invalid_timestamp_does_not_write(
+    monkeypatch, invalid, resource, dao_path, method, field, data, status
+):
+    create = Mock()
+    monkeypatch.setattr(f"{dao_path}.{method}", create)
+    result = client.post(f"/api/v1/{resource}", json={**data, field: invalid})
+    assert result.status_code == status
+    create.assert_not_called()

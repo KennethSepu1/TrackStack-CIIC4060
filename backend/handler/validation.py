@@ -12,7 +12,7 @@ from backend.dao._geometry import normalize_bbox, normalize_geometry
 
 BIGINT_MAX = 2**63 - 1
 _TIMESTAMP = re.compile(
-    r"\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:[Zz]|[+-]\d{2}:\d{2})?"
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?(?:[Zz]|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])"
 )
 
 
@@ -26,7 +26,7 @@ def integer(value: Any, field: str, minimum: int = 0) -> int:
 
 
 def timestamp(value: Any) -> datetime:
-    """Parse an ISO timestamp and normalize it to naive UTC for TIMESTAMP columns."""
+    """Require a timezone and normalize to UTC, truncating fractions to microseconds."""
     if not isinstance(value, str) or not _TIMESTAMP.fullmatch(value):
         raise ValueError("Expected an RFC 3339 timestamp.")
     result = datetime.fromisoformat(value.upper())

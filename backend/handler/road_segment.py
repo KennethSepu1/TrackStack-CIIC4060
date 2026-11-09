@@ -3,6 +3,7 @@
 from collections.abc import Mapping
 from typing import Any
 
+from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
 from backend.dao.road_segment import RoadSegmentDAO
@@ -52,8 +53,14 @@ class RoadSegmentHandler:
 
     def get(self, resource_id: str) -> JSONResponse:
         """Return one resource, or HTTP 404 when its ID does not exist."""
+        record = require_record(
+            call_dao(self.dao.get_road_segment, path_id(resource_id))
+        )
         return response(
-            require_record(call_dao(self.dao.get_road_segment, path_id(resource_id)))
+            {
+                key: record[key]
+                for key in ("road_id", "name", "speed_limit_kph", "geom", "created_at")
+            }
         )
 
     def update(self, resource_id: str, data: dict[str, Any]) -> JSONResponse:
@@ -67,12 +74,16 @@ class RoadSegmentHandler:
             status=400,
             geometry_type="LineString",
         )
-        return response(
-            require_record(
-                call_dao(
-                    self.dao.update_road_segment, identifier, error_status=400, **values
-                )
+        record = require_record(
+            call_dao(
+                self.dao.update_road_segment, identifier, error_status=400, **values
             )
+        )
+        return response(
+            {
+                key: record[key]
+                for key in ("road_id", "name", "speed_limit_kph", "geom", "created_at")
+            }
         )
 
     def delete(self, resource_id: str) -> JSONResponse:
@@ -86,6 +97,8 @@ class RoadSegmentHandler:
 
     def geojson(self, query: Mapping[str, str]) -> JSONResponse:
         """Return a paginated FeatureCollection with application/geo+json content type."""
+        if "bbox" in query:
+            raise HTTPException(400, "bbox is not supported by this endpoint.")
         params = query_parameters(
             query,
             ("name", "min_speed_kph", "max_speed_kph"),

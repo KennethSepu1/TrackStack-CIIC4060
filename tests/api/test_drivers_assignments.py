@@ -1,5 +1,4 @@
 import pytest
-
 from support import (
     MALFORMED_BODIES,
     MISSING_ID,
@@ -146,6 +145,18 @@ class TestDrivers:
     @pytest.mark.writes
     def test_create_normalizes_offset_timestamp(self, make_driver):
         assert make_driver(hired_at="2024-08-19T05:00:00-04:00")["hired_at"] == HIRED_AT
+
+    @pytest.mark.writes
+    @pytest.mark.parametrize("value", ["2026-03-14T09:00:00+00:99", "2026-03-14T09:00:00+01:60", "2026-03-14T09:00:00"])
+    def test_create_rejects_invalid_timezone(self, api, cleanup, value):
+        response = api.post("/drivers", json=driver_payload(hired_at=value))
+        cleanup.track(response, "/drivers", "driver_id")
+        assert response.status_code == 422
+
+    @pytest.mark.writes
+    def test_create_accepts_long_fraction(self, make_driver):
+        body = make_driver(hired_at="2026-03-14T09:00:00.1234567Z")
+        assert body["hired_at"] == "2026-03-14T09:00:00.123456Z"
 
     @pytest.mark.writes
     @pytest.mark.parametrize("field", DRIVER_TEXT_FIELDS + ["hired_at"])
